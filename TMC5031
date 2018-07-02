@@ -1,0 +1,166 @@
+#ifndef __TMC5031_C
+#define __TMC5031_C
+
+#include "stm32f10x.h"
+#include "TMC5031.h" 
+#include "Main.h"
+
+
+void TMC5031_Init(void)
+{
+	
+	Gconf.Bits.Motor1_Dir=0;
+	Gconf.Bits.Motor2_Dir=1;
+	Gconf.Bits.INT_PP=0;	
+	WriteTMC5031(GONF_Add, Gconf.DWord);//Register=0x00 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////*************************************Motor1 Setting**************************//////////////////////////////////////	
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	Ihold_Irun.Bits.IHOLD=8;  		//IHOLD_Max=31
+	Ihold_Irun.Bits.IRUN=23;	 	//IRUN_Max=31
+	Ihold_Irun.Bits.IHOLD_DELAY=1;  //IHOLD_DELAY_Max=15
+	WriteTMC5031(Motor1_IHOLD_IRUN_Add, Ihold_Irun.DWord ); 														//Register=0x30  
+	
+	WriteTMC5031(Motor1_Vcoolthrs_Add, 0x00089000 );		  //8~22bit Seting Coolstep   当速度大于此参数时会有噪音//Register=0x31 
+	WriteTMC5031(Motor1_PWMCONF_Add,   0x00089000 );		  //PWM CONF											//Register=0x10
+	WriteTMC5031(Motor1_VHIGH_Add,     0x00200000 );		  //Vhigh=0x00200000	                                //Register=0x32
+	WriteTMC5031(Motor1_TZEROWAIT_Add, 0x00000400 );		  //TZEROWAIT_MAX=0xffff	                            //Register=0x2c
+	
+	WriteTMC5031(Motor1_VSTART_Add,    0x000000c8 );//400	  //VSTART_MAX=2^18-1	                                //Register=0x23
+	WriteTMC5031(Motor1_VSTOP_Add,     0x000001fc );//500     //Set VSTOP ≥ VSTART!									//Register=0x2b
+	WriteTMC5031(Motor1_A1_Add,        0x0000012c );//300	  //First Acceleration between VSTART and V1            //Register=0x24
+	WriteTMC5031(Motor1_V1_Add,        0x00000190 );//800	  //First Acce/Decephase target velocity                //Register=0x25
+	WriteTMC5031(Motor1_AMAX_Add,      0x00002EE0 );    	  //Second acceleration between V1 and VMAX             //Register=0x26
+	WriteTMC5031(Motor1_VMAX_Add,      0x00000000 );//0x96000 //Second acceleration phase target velocity           //Register=0x27
+	WriteTMC5031(Motor1_DMAX_Add,      0x00002EE0 );    	  //Deceleration between VMAX and V1                    //Register=0x28
+	WriteTMC5031(Motor1_DMAX_Add,      0x0000012c );//300     //Deceleration between V1 and VSTOP                   //Register=0x2a
+	
+    //Motor1 Control  Mode
+    WriteTMC5031(Motor1_RampMode_Add,  Velocity_Positive );//Position=0   Velocity_Positive=1  Velocity_Negative=2  Hold=3	
+	
+	
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////*************************************Motor2 Setting**************************//////////////////////////////////////	
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+
+	Ihold_Irun.Bits.IHOLD=8;  		//IHOLD_Max=31
+	Ihold_Irun.Bits.IRUN=23;	 	//IRUN_Max=31
+	Ihold_Irun.Bits.IHOLD_DELAY=1;  //IHOLD_DELAY_Max=15
+	WriteTMC5031(Motor2_IHOLD_IRUN_Add, Ihold_Irun.DWord ); 													  //Register=0x50  
+	
+	WriteTMC5031(Motor2_Vcoolthrs_Add, 0x00089000 );		//8~22bit Seting Coolstep   当速度大于此参数时会有噪音//Register=0x51 
+	WriteTMC5031(Motor2_PWMCONF_Add,   0x00089000 );		//PWM CONF										      //Register=0x18
+	WriteTMC5031(Motor2_VHIGH_Add,     0x00200000 );		//Vhigh=0x00200000	                                  //Register=0x52
+	WriteTMC5031(Motor2_TZEROWAIT_Add, 0x00000400 );		//TZEROWAIT_MAX=0xffff	                              //Register=0x4c
+	
+	WriteTMC5031(Motor2_VSTART_Add,    0x000000c8 );//400	//VSTART_MAX=2^18-1	                                  //Register=0x43
+	WriteTMC5031(Motor2_VSTOP_Add,     0x000001fc );//500   //Set VSTOP ≥ VSTART!								  //Register=0x4b
+	WriteTMC5031(Motor2_A1_Add,        0x0000012c );//300	//First Acceleration between VSTART and V1            //Register=0x44
+	WriteTMC5031(Motor2_V1_Add,        0x00000190 );//800	//First Acce/Decephase target velocity                //Register=0x45
+	WriteTMC5031(Motor2_AMAX_Add,      0x00002EE0 );    	//Second acceleration between V1 and VMAX             //Register=0x46
+	WriteTMC5031(Motor2_VMAX_Add,      0x00000000 );//0x96000//Second acceleration phase target velocity          //Register=0x47
+	WriteTMC5031(Motor2_DMAX_Add,      0x00002EE0 );    	//Deceleration between VMAX and V1                    //Register=0x48
+	WriteTMC5031(Motor2_DMAX_Add,      0x0000012c );//300   //Deceleration between V1 and VSTOP                   //Register=0x2a
+	
+    //Motor2 Control Mode
+    WriteTMC5031(Motor2_RampMode_Add,  Velocity_Positive );//Position=0   Velocity_Positive=1  Velocity_Negative=2  Hold=3	
+    
+	
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    
+
+    
+
+
+
+}	
+
+unsigned char  ReadWriteSPI(unsigned char Data)
+{
+	unsigned char i;
+
+	while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE)==RESET);
+  	SPI_I2S_SendData(SPI1, Data);
+	for(i=0;i<100;i++);
+	while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_RXNE)==RESET);
+	for(i=0;i<100;i++);
+	return SPI_I2S_ReceiveData(SPI1);
+}
+
+void WriteTMC5031Datagram(unsigned char  Address, unsigned char  x1, unsigned char  x2, unsigned char  x3, unsigned char  x4)
+{
+	ReadWriteSPI(Address|0x80);
+	ReadWriteSPI(x1);
+	ReadWriteSPI(x2);
+	ReadWriteSPI(x3);
+	ReadWriteSPI(x4);
+}
+
+void WriteTMC5031(unsigned char  Address,  int data)
+{
+	
+	SPI_CS1 = 0;
+	ReadWriteSPI(Address|0x80);
+	ReadWriteSPI((unsigned char)(data>>24));
+	ReadWriteSPI((unsigned char)(data>>16));
+	ReadWriteSPI((unsigned char)(data>>8));
+	ReadWriteSPI((unsigned char)(data&0xff));
+	SPI_CS1 = 1;
+
+}
+int ReadTmc5031(unsigned addr)
+{
+   int Value=0;
+   SPI_CS1 = 0;
+   	ReadWriteSPI(addr);
+	ReadWriteSPI(0);
+	ReadWriteSPI(0);
+	ReadWriteSPI(0);
+	ReadWriteSPI(0);
+	SPI_CS1 = 1;
+	SPI_CS1 = 1;
+	SPI_CS1 = 0;
+	Value=ReadWriteSPI(addr);
+	Value=ReadWriteSPI(0);
+    Value<<=8;
+    Value|=ReadWriteSPI(0);
+    Value<<=8;
+    Value|=ReadWriteSPI(0);
+    Value<<=8;
+    Value|=ReadWriteSPI(0);
+	SPI_CS1 = 1;
+	return Value;
+}
+
+void SPI_WriteOneBit(unsigned char Address,unsigned char aPos,unsigned value)
+{
+	int Temp=0;
+	int Temp1=0;
+	Temp1=ReadTmc5031(Address);
+	if(value)
+	{
+		Temp=value<<aPos;
+		Temp1=Temp1|Temp;
+	}
+	else
+	{
+		  Temp=aPos<<(~value);
+		  Temp=~Temp;
+		  Temp1=Temp1&Temp;
+	}
+	WriteTMC5031(Address,Temp1);
+}
+
+void SPI_WriteNBit(unsigned char DeviceAddr,unsigned char Address,unsigned char aPos,unsigned char counts,unsigned char value)
+{
+	int temp;
+
+	temp=ReadTmc5031(Address);
+   	counts = ~(0xffffffff<<counts);
+	temp &= ~(counts<<aPos);
+	temp |= ((value&counts)<<aPos);
+	WriteTMC5031(Address,temp);
+}
+
+#endif
+
